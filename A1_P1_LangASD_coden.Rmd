@@ -313,7 +313,7 @@ TokensallVisits = testdata %>%
               group_by(ID) %>%
               summarise(meanWords = mean(tokens_CHI+tokens_MOT))
 #3
-
+#We don't use only averages because then we cannot compare improvements across time, or compare participants per trial and across ASD vs TD. This you can do when you keep all the data, so you can make more specific analyses
    
 
 ```

@@ -32,7 +32,97 @@ How did your models from last time perform? In this exercise you have to compare
 - optional: predictions are never certain, can you identify the uncertainty of the predictions? (e.g. google predictinterval())
 
 
-[HERE GOES YOUR ANSWER]
+In order to calculate our model's performances on the training data and the test data, we look the root mean sqare error, which is a desciption of how far the datapoints are from our general linear model. The RSME for training data is 0.34. When applying the model to the test data, the RSME raises to 0.70 - which still is not bad. In conclusion, the model is doing good in describing the training data and the test data.  
+
+
+```{r setup, include=FALSE}
+# Load library
+library(dplyr)
+library(ggplot2) 
+library(lme4)
+library(pastecs)
+
+# Set working directory
+setwd("~/Assignment-1.1")
+
+# Load data
+LU_test= read.csv("LU_test.csv")
+token_test=read.csv("Token_test.csv")
+demo_test=read.csv("demo_test.csv")
+
+
+#Clean data
+names(LU_test)[names(LU_test)=="VISIT"]="Visit"
+names(token_test)[names(token_test)=="VISIT"]="Visit"
+
+names(token_test)[names(token_test)=="SUBJ"]="ID"
+names(demo_test)[names(demo_test)=="Child.ID"]="ID"
+names(LU_test)[names(LU_test)=="SUBJ"]="ID"
+
+library(stringr)
+LU_test$Visit=str_extract(LU_test$Visit, "\\d")
+token_test$Visit=str_extract(token_test$Visit, "\\d")
+
+LU_test$ID=gsub("\\.", "", LU_test$ID)
+demo_test$ID=gsub("\\.", "", demo_test$ID)
+token_test$ID=gsub("\\.", "", token_test$ID)
+library(dplr)
+
+demo_test = select(demo_test, ID, Visit, Ethnicity, Diagnosis, Gender, Age, ADOS, MullenRaw, ExpressiveLangRaw)
+LU_test = select(LU_test, ID, Visit, MOT_MLU, MOT_LUstd, CHI_MLU, CHI_LUstd)
+token_test = select(token_test, ID, Visit, types_MOT, types_CHI, tokens_MOT, tokens_CHI)
+
+names(demo_test)[names(demo_test)=="MullenRaw"]="nonVerbalIQ"
+names(demo_test)[names(demo_test)=="ExpressiveLangRaw"]="verbalIQ"
+
+data1=merge(LU_test,token_test,by=c("ID","Visit"))
+  
+data=merge(data1,demo_test,by=c("ID","Visit")) 
+
+visit1 = subset(data[data$Visit == "1",])
+
+visit1=select(visit1,ADOS,verbalIQ,nonVerbalIQ,ID)
+
+data=data[-15:-17]
+
+data=merge(visit1,data,by=c("ID"))
+#Rename ID to numbers
+
+data$ID=as.factor(data$ID)
+levels(data$ID)=1:length(levels(data$ID))
+
+#
+data$Visit=as.numeric(data$Visit)
+levels(data$Visit)=1:length(levels(data$Visit))
+
+#Rename gender
+library(plyr)
+data$Gender=as.factor(data$Gender)
+data$Gender = revalue(data$Gender, c("1"="M", "2"="F"))
+
+data$Diagnosis= revalue(data$Diagnosis,c("A"="ASD","B"="TD"))
+
+write.csv(data,file="AutismData_test.csv")
+
+
+data_old=read.csv("AutismData1.csv")
+data_new=read.csv("AutismData_test.csv")
+
+# Our Code
+
+m1 = lmer(CHI_MLU ~ Visit + MOT_MLU + verbalIQ + (1+Visit|ID), data_old, REML =F)
+
+install.packages("modelr")
+library(modelr)
+
+rmse(m1,data_new)
+
+
+# In order to calculate the models performance, we look the root mean sqare error. The RSME for training data is 0.34. When applying the model to the test data, the RSME raises to 0.70 - which still is not bad. 
+
+#Predict???
+
+```
 
 ### Exercise 2) Model Selection via Cross-validation (N.B: ChildMLU!)
 
@@ -50,6 +140,73 @@ In this exercise you have to use cross-validation to calculate the predictive er
 - Bonus Question 2: What is the effect of changing the number of folds? Can you plot RMSE as a function of number of folds?
 - Bonus Question 3: compare the cross-validated predictive error against the actual predictive error on the test data
 
+For this exercise a loop was created in order to crossvalidate to calculate the predictive error. By doing so we saw how our original model's fixed effects only could explain 23% of the varience. Then we created 4 other models including other predictors. By running them throug the loop we could see one of the new models could explain 55% of the varience. 
+
+```{r setup, include=FALSE}
+#Model
+
+m2 = lmer(CHI_MLU ~ Visit + Diagnosis + (1+Visit|ID), data_new, REML = F)
+
+# Crossvalidation
+
+install.packages("groupdata2")
+install.packages("Metrics")
+library(groupdata2)
+library(MuMIn)
+
+
+trainingdata= fold(data_old, k=4, cat_col = "Diagnosis", id_col = "ID")
+
+#Creating function for automatic crossvalidation. Outputs R2c, R2m and RMSE for each fold, as well the mean values across folds
+cv = function(data, k, model, dependent){
+#Creating variables for storing performances
+rmselist = list()
+r2list = list()
+#Creating loop
+for (i in 1:k){
+  train = data[data$.folds != i,]    #creating training set (all folds except the one)
+  validation = data[data$.folds == i,] #creating testing/validation set (the current fold)
+  model = lmer(model, train, REML = F)   #running lmer on the model specified in the function call
+  rmselist[i] = Metrics::rmse(validation[[dependent]], predict(model, validation, allow.new.levels = T))  #saving model rmse
+  r2list[i] = as.data.frame(r.squaredGLMM(model))     #saving r2c and r2m
+}
+#doing some wrangling so the R2 outputs can be printed in a nice format
+r2list = as.data.frame(t(as.data.frame(r2list)))
+colnames(r2list) = c("R2m", "R2c")
+rownames(r2list) = seq(1:k)
+r2list = as.data.frame(r2list)
+
+#returning the wanted values
+return(c('RMSE' = rmselist, 'Mean RMSE' = mean(unlist(rmselist)), r2list,  'Mean R2m' = mean(r2list$R2m), 'Mean R2c' =  mean(r2list$R2c)))
+}
+
+m1 = "CHI_MLU ~ Visit + Diagnosis + (1+Visit|ID)"
+cv(trainingdata, 4, m1, 'CHI_MLU')
+
+#Our models fixed effects can only predict 23% of the varience. 
+
+#Now we try new models
+
+m2 = "CHI_MLU ~ Visit + Diagnosis +MOT_MLU + (1+Visit|ID)"
+cv(trainingdata, 4, m2, 'CHI_MLU')
+
+#30% of the varience
+
+m3 = "CHI_MLU ~ Visit + Diagnosis+verbalIQ + (1+Visit|ID)"
+cv(trainingdata, 4, m3, 'CHI_MLU')
+#51% of the varience
+
+m4 = "CHI_MLU ~ Visit + Diagnosis+ MOT_MLU+verbalIQ+ (1+Visit|ID)"
+cv(trainingdata, 4, m4, 'CHI_MLU')
+#55% of the varience
+ 
+
+
+
+
+
+```
+
 ### Exercise 3) Assessing the single child
 
 Let's get to business. This new kiddo - Bernie - has entered your clinic. This child has to be assessed according to his group's average and his expected development.
@@ -63,7 +220,66 @@ You want to evaluate:
 
 - how does the child fare compared to the model predictions at Visit 6? Is the child below or above expectations? (tip: use the predict() function on Bernie's data only and compare the prediction with the actual performance of the child)
 
-[HERE GOES YOUR ANSWER]
+Bernie perform worse compared to the avarage TD child. Bernie has by visit 1 a shorter MLU of 0.67. At visit 2 he has shorter MLU of 0.78. At visit 3 he has shorter MLU of 1.12. At visit 4 he has shorter MLU of 0.44. At visit 5 he has shorter MLU of 0.20. At visit 6 he has shorter MLU of 0.52.
+
+Our model can predict how a childs MLU would developed based on the mothers MLU and the verbal IQ of the child. Bernie performs close to how the model predicts. At visit 6 Bernie has a MLU of 3.45. The model predicts Bernie to have a MLU of 3.62 - So our model miss with 0.18 - which is not a lot. 
+
+
+```{r}
+
+#crl+alt+i for ny rmarkdown
+
+
+bernie=subset(data_new,ID=="2")
+
+model=lmer(CHI_MLU ~ Visit + Diagnosis+ MOT_MLU+verbalIQ+ (1+Visit|ID),data_old)
+summary(model)
+
+tsub=subset(data_old,Diagnosis=="TD")
+
+avgMOTMLU = tsub %>% 
+  group_by(Visit) %>% 
+  summarize(MOT_MLU = mean(MOT_MLU))
+
+avgCHI_MLU = tsub %>%
+  group_by(Visit) %>%
+  summarize(CHI_MLU = mean(CHI_MLU))
+avgMOTMLU[2]
+avgCHI_MLU
+
+td_chi = data.frame(ID = rep(300, 6), Visit = seq(1,6), Diagnosis="TD",verbalIQ=mean(tsub$verbalIQ),MOT_MLU=avgMOTMLU[2], CHI_MLU = avgCHI_MLU[2])
+
+bernie=dplyr::select(bernie,ID,Visit,Diagnosis,verbalIQ,MOT_MLU,CHI_MLU)
+bernie
+
+avgTD_bernie = rbind(td_chi, bernie)
+avgTD_bernie$Visit = as.factor(avgTD_bernie$Visit)
+avgTD_bernie$ID = as.factor(avgTD_bernie$ID)
+
+avgTD_bernie
+
+install.packages("ggplot2")
+library(ggplot2)
+
+#Lille flot plot
+ggplot(avgTD_bernie, aes(Visit, CHI_MLU, color = ID)) +
+  geom_point()
+
+#Shows how much better Bernie is a every visit compared to the avarage TD child.
+td_chi$CHI_MLU-bernie$CHI_MLU
+
+#Predict Bernies CHI_MLU at visit 6
+bernie_predict=predict(model, bernie, allow.new.levels = T)
+
+bernie$CHI_MLU-bernie_predict
+
+bernie_predict
+
+#Bernie perform worse at the 6th visit compared to the average TD child by 0.18
+
+```
+
+
 
 ### OPTIONAL: Exercise 4) Model Selection via Information Criteria
 Another way to reduce the bad surprises when testing a model on new data is to pay close attention to the relative information criteria between the models you are comparing. Let's learn how to do that!

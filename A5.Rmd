@@ -1,0 +1,195 @@
+---
+title: "Assignment 5 - Meta-analysis of pitch in schizophrenia"
+author: "Katrine Tølbøll"
+date: "3/7/2017"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Building on the shoulders of giants: meta-analysis
+
+## Questions to be answered
+
+1. What is the current evidence for distinctive patterns of pitch mean and pitch sd in schizophrenia? Report how many papers report quantitative estimates, your method to analyze them, the estimated effect size of the difference (mean effect size and standard error for pitch mean, same for pitch sd) and forest plots representing it. 
+
+The evidence for distinctive patterns of ptich mean and pitch sd is lacking. Only 4 papers have reported quantitative estimates of pitch mean and standard of the mean, whereas 6 papers have reported quantitative measures of standard deviation of pitch and corresponding standard deviation. 
+The method we used to analyze the papers, was to first calculate Cohen's D  (yi) and variance of Cohen's D (vi) for each of the papers. This was done using the escalc() function from the metafor R package. Following this, mixed effects models were conducted, using effect size (vi) as the outcome variable predicted only by the intercept with article as random intercept and weighted by the variance of the effect size (yi).
+Forest plots were produced, visualizing the effect size across papers. 
+
+The model using the effect size of the mean and standard deviation of the mean as outcome, produced these results:
+β = 0.1770, st.e = 0.1689, for a very insignificant result. The forest plot showed all results to lie within the same confidence intervals, however the confidence intervals of the model crossed 0: Cohen's D = 0.13 [-0.24, 0.49]
+
+The model using the effect size of the standard deviation and standard deviation of the standard deviation (phew) as outcome, produced these results:
+β = 0.1251, st.e = 0.5793, for a very insignificant result. The forest plot showed all results but one (Cohen et al. 2014) to lie within the same confidence intervals, however the confidence intervals of the model crossed 0: Cohen's D = 0.35 [-1.31, 2.02]
+
+WHY ARE THE LMER ESTIMATES DIFFERENT FROM THE COHEN'S D FROM RMA?
+
+2. Do the results match your own analysis from Assignment 3? If you add your results to the meta-analysis, do the estimated effect sizes change? Report the new estimates and the new forest plots.
+
+By adding our own results from assingment 3, the models changed considerably. The model using pitch mean produced these results:
+β = 0.144, std. e = 0.059, for a slightly less worse model. The forest plot showed the confidence intervals to barely miss crossing 0: Cohen's D = 0.14 [0.01, 0.27]
+
+The model using pitch standard deviation produced these results:
+β = -0.112, std. e = 0.230.. The forest plot showed the confidence intervals to cross zero: Cohen's D = 0.28 [-1.12, 1.68]
+
+3. Assess the quality of the literature: report and comment on heterogeneity of the studies (tau, I2), on publication bias (funnel plot), and on influential studies.
+
+We calculated overall variance (τ²) and assessed whether it could be explained by within-study variance (e.g., due to measurement noise or heterogeneity in the ASD samples included in the studies) using Cochran’s Q (Cochran, 1954) and I² statistics (Higgins, Thompson, Deeks, & Altman, 2003) 
+
+
+For the pitch mean model, overall variance (τ²) of 0.0023, st.e = 0.0239. Much of the variance (I²: 5.46%) could be reducoed to random sample variablity between studies (Q-stats = 5.41, p = 0.25)
+
+For the pitch standard deviation model, overall variance (τ²) of 3.50, st.e = 2.06. Much of the variance (I²: 98.76%) could not be reducoed to random sample variablity between studies (Q-stats = 129.48, p < .0001)
+
+## Tips on the process to follow:
+
+- Download the data on all published articles analyzing pitch in schizophrenia: https://www.dropbox.com/s/pmgw8wzc308so1p/Data.csv?dl=0
+- Following the procedure in the slides calculate effect size and standard error of the effect size per each study. N.B. we focus on pitch mean and pitch standard deviation.
+ . first try using lmer (to connect to what you know of mixed effects models)
+ . then use rma() (to get some juicy additional statistics)
+
+- Build a forest plot of the results (forest(model))
+ http://rpsychologist.com/d3/cohend/
+- Go back to Assignment 3, add your own study to the data table, and re-run meta-analysis. Do the results change?
+
+- Now look at the output of rma() and check tau and I2
+
+```{r}
+p_load(tidyverse, metafor, lme4, lmerTest)
+
+df = read.csv("Data.csv", sep = ";")
+
+#calculating Cohen's d as well as its variance for pitch mean
+df = escalc('SMD', n1i = SampleSizeSchizo, n2i = SampleSizeContros, m1i = PitchMeanSchizo, m2i = PitchMeanControls, sd1i = PitchMeanSchizoSD, sd2i = PitchMeanControlsSD, data = df)
+
+#renaming the yi and vi values (yi = Cohen's D, vi = variance of D)
+names(df)[names(df) == 'yi'] = 'yiMean'
+names(df)[names(df) == 'vi'] = 'viMean'
+
+#calculating Cohen's d as well as its variance for pitch SD
+df = escalc('SMD', n1i = SampleSizeSchizo, n2i = SampleSizeContros, m1i = PitchSDSchizo, m2i = PitchSDControls, sd1i = PitchSDSchizoSD, sd2i = PitchSDControlsSD, data = df )
+
+#renaming the yi and vi values
+names(df)[names(df) == 'yi'] = 'yiSD'
+names(df)[names(df) == 'vi'] = 'viSD'
+
+
+#creating models
+m1 = lmer(yiMean ~ 1 + (1|Article), weights = 1/viMean, data=df, control=lmerControl(check.nobs.vs.nlev="ignore", check.nobs.vs.nRE="ignore"))
+summary(m1)
+
+m2 = lmer(yiSD ~ 1 + (1|Article), weights = 1/viSD, data=df, control=lmerControl(check.nobs.vs.nlev="ignore", check.nobs.vs.nRE="ignore"))
+summary(m2)
+
+#creating metaanalysis optimized models and forest plots
+res1 = rma(yiMean, viMean, data = df, slab=Article) 
+res1
+forest(res1) 
+
+res2 = rma(yiSD, viSD, data = df, slab=Article) 
+forest(res2) 
+
+#nothing's significant, everything crosses zero :(
+```
+
+Calculating Pitch Mean and SD from assignment 3
+
+```{r}
+as3 = read.csv("combinedSchizoData.csv")
+
+TDsub = subset(as3, Diagnosis == "Control")
+Schizosub = subset(as3, Diagnosis == "Schizophrenia")
+
+TDmeans = TDsub %>%
+  summarise(SampleSizeContros = n(), PitchMeanControls = mean(mean, na.rm = T), PitchMeanControlsSD = sd(mean, na.rm = T), PitchSDControls = mean(sd, na.rm = T), PitchSDControlsSD = sd(sd, na.rm = T))
+
+
+Schizomeans = Schizosub %>%
+  summarise(SampleSizeSchizo = n(), PitchMeanSchizo = mean(mean, na.rm = T), PitchMeanSchizoSD = sd(mean, na.rm = T), PitchSDSchizo = mean(sd, na.rm = T), PitchSDSchizoSD = sd(sd, na.rm = T))
+
+as3means = cbind(TDmeans, Schizomeans)
+as3means$Article = "Bølgen et. al 2017"
+as3means$Year = "2017"
+```
+
+Adding as3 to the metaanalysis and re-running the analysis.
+```{r}
+df = read.csv("Data.csv", sep = ";")
+df = rbind(df, as3means)
+
+#calculating Cohen's d as well as its variance for pitch mean
+df = escalc('SMD', n1i = SampleSizeSchizo, n2i = SampleSizeContros, m1i = PitchMeanSchizo, m2i = PitchMeanControls, sd1i = PitchMeanSchizoSD, sd2i = PitchMeanControlsSD, data = df)
+
+#renaming the yi and vi values (yi = Cohen's D, vi = variance of D)
+names(df)[names(df) == 'yi'] = 'yiMean'
+names(df)[names(df) == 'vi'] = 'viMean'
+
+#calculating Cohen's d as well as its variance for pitch SD
+df = escalc('SMD', n1i = SampleSizeSchizo, n2i = SampleSizeContros, m1i = PitchSDSchizo, m2i = PitchSDControls, sd1i = PitchSDSchizoSD, sd2i = PitchSDControlsSD, data = df )
+
+#renaming the yi and vi values
+names(df)[names(df) == 'yi'] = 'yiSD'
+names(df)[names(df) == 'vi'] = 'viSD'
+
+
+#creating models
+m1 = lmer(yiMean ~ 1 + (1|Article), weights = 1/viMean, data=df, control=lmerControl(check.nobs.vs.nlev="ignore", check.nobs.vs.nRE="ignore"))
+summary(m1)
+
+m2 = lmer(yiSD ~ 1 + (1|Article), weights = 1/viSD, data=df, control=lmerControl(check.nobs.vs.nlev="ignore", check.nobs.vs.nRE="ignore"))
+summary(m2)
+
+#creating metaanalysis optimized models and forest plots
+res1 = rma(yiMean, viMean, data = df, slab=Article) 
+forest(res1) 
+#baaaarely not zero
+
+
+res2 = rma(yiSD, viSD, data = df, slab=Article) 
+forest(res2) 
+
+
+```
+
+```{r}
+#tau² and i² 
+res1
+res2
+
+#testing for influential studies 
+inf1 = influence(res1) 
+print(inf1) 
+plot(inf1)
+#Our study is influential 
+
+inf2 = influence(res2) 
+print(inf2) 
+plot(inf2)
+#Cohen 2014 is influential
+
+
+#funnel plooot
+plot(res1) #all sorts of plots!!
+funnel(res1, main = "Random-Effects Model",xlab = "Standardized Mean Difference") 
+#could be worse..
+
+
+plot(res2) #all sorts of plots!!
+funnel(res2, main = "Random-Effects Model",xlab = "Standardized Mean Difference") 
+#could be better..
+
+
+#regtest and ranktest
+regtest(res1) 
+ranktest(res1) 
+
+regtest(res2) 
+ranktest(res2)
+
+```
+
+
+

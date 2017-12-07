@@ -26,9 +26,16 @@ N.B. the predict() function generates probabilities (the full scale between 0 an
 N.B. you need to decide whether calculate performance on each single test fold or save all the prediction for test folds in one datase, so to calculate overall performance.
 N.B. Now you have two levels of structure: subject and study. Should this impact your cross-validation?
 ```{r}
+install.packages("devtools")
+library(devtools)
+devtools::install_github("LudvigOlsen/groupdata2")
+devtools::install_github("LudvigOlsen/cvms")
+
+library(pacman)
 p_load(tidyverse, stringr, lme4, lmerTest, knitr, caret, e1071, pROC, groupdata2, cvms)
 library(cvms)
-setwd("~/Desktop/EM3/Portfolios/Voice-in-Schizophrenia")
+
+setwd("~/Assignment-1.1")
 df = read.csv("combinedSchizoData.csv")
 #removing two useless columns
 df$X.1 = NULL
@@ -130,7 +137,7 @@ return(result_df)
 }
 
 nfolds = 4
-df = fold(df, k=nfolds, cat_col = "Diagnosis", id_col = "ID")
+df = fold(df, k=nfolds, cat_col = "Diagnosis", id_col = "Subject")
 
 m = "Diagnosis ~ range  +(1|Study)"
 m1cv = cv(df, nfolds, m, "Diagnosis")
@@ -178,10 +185,11 @@ CV <- cross_validate(df, mixed_models,
                      folds_col = '.folds', 
                      family='binomial', 
                      REML = FALSE)
+CV
 
 max = which.max(CV$AUC)
 CV[max,]$Fixed
-#LAM seems to be the best predictor
+#coefvar seems to be the best predictor
 ```
 
 
@@ -195,6 +203,70 @@ Remember:
 - Save the model: save(modelName, file = "BestModelForever.rda")
 - Create a Markdown that can: a) extract the features from new pitch files (basically your previous markdown), b) load your model (e.g. load("BestModelForever.rda")), and c) predict the diagnosis in the new dataframe.
 Send it to Celine and Riccardo by Monday (so they'll have time to run it before class)-
+
+```{r}
+##Using Ludvigs lovely cv function for cross validating multiple functions at once
+mixed_models1 <- c("Diagnosis~range+(1|Study)",
+                  "Diagnosis~iqr+(1|Study)",
+                  "Diagnosis~mad+coefvar+iqr+(1|Study)",
+                  "Diagnosis~mad+LAM+coefvar+iqr+(1|Study)")
+CV1 <- cross_validate(df, mixed_models1, 
+                     folds_col = '.folds', 
+                     family='binomial', 
+                     REML = FALSE)
+
+CV1
+
+max = which.max(CV1$AUC)
+CV1[max,]$Fixed
+
+
+#Split data
+library(caTools)
+
+set.seed(88)
+split <- sample.split(df$Subject, SplitRatio = 0.75)
+
+train <- subset(df, split == TRUE)
+test <- subset(df, split == FALSE)
+
+#Specify model
+
+#AIC METHOD
+
+bestmodelevartrain= glmer(Diagnosis ~ mad+coefvar+iqr + (1|Subject) , train, family = "binomial",  control = glmerControl(calc.derivs = FALSE))
+summary(bestmodelevartrain)
+
+#AIC=1328,6
+
+bestmodelevartest= glmer(Diagnosis ~ mad+coefvar+iqr + (1|Subject), test, family = "binomial",  control = glmerControl(calc.derivs = FALSE))
+summary(bestmodelevartest)
+
+#AIC=447,7
+
+#Model explain even better on test data than train #craycray
+
+#Chech for AUC
+#Train
+train$PredictionsPerc=predict(bestmodelevartrain)
+rocCurve <- roc(response = train$Diagnosis, predictor = train$PredictionsPerc)
+aucc = auc(rocCurve)
+#auc=0,74
+
+
+#Test
+test$PredictionsPerc=predict(bestmodelevartest)
+rocCurve <- roc(response = test$Diagnosis, predictor = test$PredictionsPerc)
+aucc = auc(rocCurve)
+#auc=0,65
+
+#Det giver mest mening at kigge efter AIC siden "AIC is the measure of fit". AUC beskriver evnen til at forudsige data givet det data. Derfor vil train være bedre da det har mere data at træne på end test.
+
+
+
+
+
+```
 
 ### Question 4: Report the results
 

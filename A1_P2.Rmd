@@ -87,7 +87,7 @@ library(dplyr)
 library(ggplot2) 
 library(lme4)
 library(pastecs)
-
+install.packages("nlme")
 
 ```
 
@@ -222,7 +222,14 @@ Remember: a growth curve model assesses whether changes in time can be described
 First build the different models, then compare them to see which one is better
 
 ```{r}
+#growthcurve 
+library(nlme)
 
+Quadratic_m=lmer(CHI_MLU~Visit+I(Visit^2) + Diagnosis +(1+Visit|ID),data, REML=FALSE)
+Cubic_m=lmer(CHI_MLU~Visit+I(Visit^2)+I(Visit^3) + Diagnosis +(1+Visit|ID), data, REML=FALSE)
+anova(diagnosisTest,Quadratic_m,Cubic_m)
+
+#The quadric model is significantly better than the linear (p<0.05)
 ```
 
 Exciting right?

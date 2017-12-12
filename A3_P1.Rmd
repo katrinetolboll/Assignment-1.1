@@ -1,6 +1,6 @@
 ---
 title: "Assignment2_Part1_VoiceInSchizophrenia"
-author: "Riccardo Fusaroli"
+author: "Katrine Tølbøll"
 date: "July 17, 2016"
 output: html_document
 ---

@@ -1,6 +1,6 @@
 ---
 title: "Assignment 1 - Language Development in ASD - part 2"
-author: "Riccardo Fusaroli"
+author: "Katrine Tølbøll"
 date: "July 7, 2017"
 output: html_document
 ---

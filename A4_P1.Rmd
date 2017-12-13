@@ -55,7 +55,7 @@ N.B. to give you a bit more data I included data from last year (Study1) and fro
 
 ```{r}
 library(pacman)
-p_load(tidyverse, crqa, readr, groupdata2, gridExtra, stringr)
+p_load(tidyverse, crqa, readr, groupdata2, gridExtra, stringr, lmerTest, MuMIn)
 
 #reading all data from group 5
 Sync1 = read_csv("CleanData/Study2_G5_T1_Synchronous.csv")
@@ -176,9 +176,6 @@ image(RP, xlab = "", ylab = "", col = cols)
 radius = median(radius) + 1.2 seems to be good according to Riccardo
 
 ```{r preprocessing function}
-
-#removing files 1,2, 4, 5 as well as all selfpaced conditions
-
 #####
 #BIG FAT FUNCTION
 #####
@@ -312,7 +309,9 @@ processed = processed %>%
          opt_delayResp = median(processed$optDelayResp, na.rm = T), 
          opt_radResp = median(processed$optRadiusResp, na.rm = T))
 
-write.csv(processed, file = "processedData.csv")
+#write.csv(processed, file = "processedData.csv")
+
+#removing files 1,2, 4, 5 as well as all selfpaced conditions
 
 ###REMOMVE 1, 2, 4, 5
 ```
@@ -445,7 +444,7 @@ summarised_df = df  %>%
       ##do the same for shuf to compare
 
 
-write.csv(final_df, "final_df.csv")
+#write.csv(final_df, "final_df.csv")
 
 ```
 
@@ -477,7 +476,7 @@ preprocessed_files = list.files(path = "preprocessed/", pattern = "*.csv")
 shuffled_df = lapply(preprocessed_files, rqaFun, shuf = T)
 shuffled_df = bind_rows(shuffled_df)
 shufff = summa(shuffled_df)
-write.csv(shuffled_df, "shuffled_df.csv")
+#write.csv(shuffled_df, "shuffled_df.csv")
 
 ```
  
@@ -541,14 +540,14 @@ for (g in seq(unique(all_dat$group))){ #loop through all the groups
     if (i == 1){ #create df
       surPair_rqa = temp
       i = 2 #if you have already done this then don't do it again
-    } else { #append to d
+    } else { #append to df
       surPair_rqa = rbind(surPair_rqa, temp)
     }
   print(c)
   }
 }
 
-write.csv(surPair_rqa,"surPairs.csv")
+#write.csv(surPair_rqa, "surPairs.csv")
 ```
 
 
@@ -557,6 +556,8 @@ write.csv(surPair_rqa,"surPairs.csv")
 #reading original data sets
 og_df = read.csv("final_df.csv")
 shuf_df = read.csv("shuffled_df.csv")
+surPair_rqa = read.csv("surPairs.csv")
+surPair_rqa$X = NULL
 
 sum_og_df = summa(og_df)
 sum_shuf_df = summa(shuf_df)
@@ -577,11 +578,60 @@ surPair_rqa = select(surPair_rqa, -c(group1, group2))
 
 final_df = rbind(sum_shuf_df, sum_og_df, surPair_rqa)
 
-m = lmer(RR.HR ~ type + (1|group), final_df)
-summary(m)
-m2 = lmer(RR.Resp ~ type + (1|group), final_df)
-summary(m2)
+final_df$type = as.factor(final_df$type)
+final_df$type = relevel(final_df$type, ref = "Shuffled")
 
+#write.csv(final_df, "final_df.csv")
+```
+
+#modelz
+```{r}
+mRR = lmer(RR.HR ~ type + (1|group), final_df)
+mDET = lmer(DET.HR ~ type + (1|group), final_df) 
+mNRLINE = lmer(NRLINE.HR ~ type + (1|group), final_df) 
+mTT = lmer(TT.HR ~ type + (1|group), final_df)
+mL = lmer(L.HR ~ type + (1|group), final_df)
+mMaxL = lmer(maxL.HR ~ type + (1|group), final_df)
+mENTR = lmer(ENTR.HR ~ type + (1|group), final_df) 
+mrENTR = lmer(rENTR.HR ~ type + (1|group), final_df) 
+mLAM = lmer(LAM.HR ~ type + (1|group), final_df) 
+
+
+
+
+summary(mRR)
+summary(mDET)  #significant!!!!!!!!!!1111
+summary(mTT)  #also significant!!11!1!1!
+summary(mL)  #woohoo!!
+summary(mMaxL) #helzz yeah
+summary(mNRLINE)
+summary(mENTR) #yep
+summary(mrENTR) #yepyep
+summary(mLAM) #yepyepyep
+
+mRR = lmer(RR.Resp ~ type  + (1|group), final_df)
+mDET = lmer(DET.Resp ~ type + (1|group), final_df)
+mTT = lmer(TT.Resp ~ type + (1|group), final_df)
+mL = lmer(L.Resp ~ type + (1|group), final_df)
+mMaxL = lmer(maxL.Resp ~ type + (1|group), final_df)
+mNRLINE = lmer(NRLINE.Resp ~ type + (1|group), final_df) 
+mENTR = lmer(ENTR.Resp ~ type + (1|group), final_df) 
+mrENTR = lmer(rENTR.Resp ~ type + (1|group), final_df) 
+mLAM = lmer(LAM.Resp ~ type + (1|group), final_df) 
+
+
+
+summary(mRR)
+summary(mDET) #signifz
+summary(mTT) #sniiii
+summary(mL) #extra snugiz
+summary(mMaxL) #woopsz
+summary(mNRLINE) #yas
+summary(mENTR) #yas
+summary(mrENTR) #yas
+summary(mLAM) #helt sikkert
+
+r.squaredGLMM(m2)
 ```
 
 
@@ -591,19 +641,58 @@ summary(m2)
  
  
 ```{r}
+mRR = lmer(RR.HR ~ condition + (1|group), final_df)
+mDET = lmer(DET.HR ~ condition + (1|group), final_df) 
+mTT = lmer(TT.HR ~ condition + (1|group), final_df)
+mL = lmer(L.HR ~ condition + (1|group), final_df)
+mMaxL = lmer(maxL.HR ~ condition + (1|group), final_df)
+mNRLINE = lmer(NRLINE.HR ~ condition + (1|group), final_df) 
+mENTR = lmer(ENTR.HR ~ condition + (1|group), final_df) 
+mrENTR = lmer(rENTR.HR ~ condition + (1|group), final_df) 
+mLAM = lmer(LAM.HR ~ condition + (1|group), final_df) 
 
-m = lmer(RR.HR ~ condition + (1|group), og_df)
-summary(m)
-m2 = lmer(RR.Resp ~ condition + (1|group), og_df)
-summary(m2)
+
+
+summary(mRR)
+summary(mDET)
+summary(mTT) 
+summary(mL)  
+summary(mMaxL)
+summary(mNRLINE) #synchronous
+r.squaredGLMM(mNRLINE)
+summary(mENTR)
+summary(mrENTR)
+summary(mLAM)
+
+
+
+mRR = lmer(RR.Resp ~ condition  + (1|group), final_df)
+mDET = lmer(DET.Resp ~ condition + (1|group), final_df)
+mTT = lmer(TT.Resp ~ condition + (1|group), final_df)
+mL = lmer(L.Resp ~ condition + (1|group), final_df)
+mMaxL = lmer(maxL.Resp ~ condition + (1|group), final_df)
+mNRLINE = lmer(NRLINE.Resp ~ condition + (1|group), final_df) 
+mENTR = lmer(ENTR.Resp ~ condition + (1|group), final_df) 
+mrENTR = lmer(rENTR.Resp ~ condition + (1|group), final_df) 
+mLAM = lmer(LAM.Resp ~ condition + (1|group), final_df) 
+
+
+
+summary(mRR) #turntaking
+r.squaredGLMM(mRR)
+summary(mDET) 
+summary(mTT) 
+summary(mL) 
+summary(mMaxL) 
+summary(mNRLINE)
+summary(mENTR)
+summary(mrENTR)
+summary(mLAM)
+
 ```
 
 ### Effects of respiration coordination on heart rate coordination
  - describe how you would test those.
  - Optional: run the models and report them
  
- 
- 
- ```{r}
-#se kenneths besked
 ```
